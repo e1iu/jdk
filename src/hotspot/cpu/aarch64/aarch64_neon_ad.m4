@@ -1,5 +1,5 @@
-// Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
-// Copyright (c) 2020, 2021, Arm Limited. All rights reserved.
+// Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2020, 2022, Arm Limited. All rights reserved.
 // DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 //
 // This code is free software; you can redistribute it and/or modify it
@@ -940,8 +940,15 @@ instruct extract$1$2`'(vReg$2 dst, vec$3 src, immI idx)
   ins_cost(INSN_COST);
   format %{ "ins   $dst, $4, $src, 0, $idx\t# extract from vector($1$2)" %}
   ins_encode %{
-    __ ins(as_FloatRegister($dst$$reg), __ $4,
-           as_FloatRegister($src$$reg), 0, $idx$$constant);
+    if ((0 == $idx$$constant) &&
+        (as_FloatRegister($dst$$reg) == as_FloatRegister($src$$reg))) {
+      /* empty */
+    } else if ($idx$$constant == 0) {
+      __ ifelse($2, F, fmovs, fmovd)(as_FloatRegister($dst$$reg), as_FloatRegister($src$$reg));
+    } else {
+      __ ins(as_FloatRegister($dst$$reg), __ $4,
+             as_FloatRegister($src$$reg), 0, $idx$$constant);
+    }
   %}
   ins_pipe(pipe_class_default);
 %}')dnl

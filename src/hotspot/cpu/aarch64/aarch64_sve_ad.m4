@@ -2500,46 +2500,86 @@ instruct vcvtDtoF(vReg dst, vReg src, vReg tmp)
 dnl
 dnl
 // ------------------------------ Vector extract ---------------------------------
-define(`VECTOR_EXTRACT_SXT', `
-instruct extract$1`'($2 dst, vReg src, immI idx, pRegGov pgtmp, rFlagsReg cr)
-%{
-  predicate(UseSVE > 0);
-  match(Set dst (Extract$1 src idx));
-  effect(TEMP pgtmp, KILL cr);
-  ins_cost(2 * SVE_COST);
-  format %{ "sve_extract $dst, $3, $pgtmp, $src, $idx\n\t"
-            "sbfmw $dst, $dst, 0U, $5\t# extract from vector($1)" %}
-  ins_encode %{
-    __ sve_extract(as_$4($dst$$reg), __ $3, as_PRegister($pgtmp$$reg),
-                   as_FloatRegister($src$$reg), (int)($idx$$constant));
-    __ sbfmw(as_$4($dst$$reg), as_$4($dst$$reg), 0U, $5);
-  %}
-  ins_pipe(pipe_slow);
-%}')dnl
-dnl                $1 $2         $3 $4        $5
-VECTOR_EXTRACT_SXT(B, iRegINoSp, B, Register, 7U)
-VECTOR_EXTRACT_SXT(S, iRegINoSp, H, Register, 15U)
-
 dnl
-define(`VECTOR_EXTRACT', `
-instruct extract$1`'($2 dst, vReg src, immI idx, pRegGov pgtmp, rFlagsReg cr)
+define(`VECTOR_EXTRACT_I', `
+instruct extract$1`'($3 dst, vReg src, immI idx, vReg vtmp)
 %{
-  predicate(UseSVE > 0);
+  predicate(UseSVE > 0 && n->in(2)->get_int() >= $2);
   match(Set dst (Extract$1 src idx));
-  effect(TEMP pgtmp, KILL cr);
+  effect(TEMP vtmp);
   ins_cost(2 * SVE_COST);
-  format %{ "sve_extract $dst, $3, $pgtmp, $src, $idx\t# extract from vector($1)" %}
+  format %{ "sve_extract_integral $dst, $4, $src, $idx\t# extract from vector($1)" %}
   ins_encode %{
-    __ sve_extract(as_$4($dst$$reg), __ $3, as_PRegister($pgtmp$$reg),
-                   as_FloatRegister($src$$reg), (int)($idx$$constant));
+    __ sve_extract_integral(as_Register($dst$$reg), __ $4, as_FloatRegister($src$$reg),
+                            (int)($idx$$constant), /* is_signed */ ifelse($1, L, false, true), as_FloatRegister($vtmp$$reg));
   %}
   ins_pipe(pipe_slow);
 %}')dnl
-dnl            $1 $2         $3 $4
-VECTOR_EXTRACT(I, iRegINoSp, S, Register)
-VECTOR_EXTRACT(L, iRegLNoSp, D, Register)
-VECTOR_EXTRACT(F, vRegF,     S, FloatRegister)
-VECTOR_EXTRACT(D, vRegD,     D, FloatRegister)
+dnl              $1 $2  $3         $4
+VECTOR_EXTRACT_I(B, 16, iRegINoSp, B)
+VECTOR_EXTRACT_I(S, 8,  iRegINoSp, H)
+VECTOR_EXTRACT_I(I, 4,  iRegINoSp, S)
+VECTOR_EXTRACT_I(L, 2,  iRegLNoSp, D)
+dnl
+define(`VECTOR_EXTRACT_I_LT', `
+instruct extract$1_LT$2`'($3 dst, vReg src, immI idx)
+%{
+  predicate(UseSVE > 0 && n->in(2)->get_int() < $2);
+  match(Set dst (Extract$1 src idx));
+  ins_cost(INSN_COST);
+  format %{ "ifelse($4, D, umov, smov) $dst, $4, $src, $idx\t# extract from vector($1)" %}
+  ins_encode %{
+    __ ifelse($4, D, umov, smov)(as_Register($dst$$reg), as_FloatRegister($src$$reg), __ $4, $idx$$constant);
+  %}
+  ins_pipe(pipe_class_default);
+%}')dnl
+dnl                 $1  $2  $3         $4
+VECTOR_EXTRACT_I_LT(B,  16, iRegINoSp, B)
+VECTOR_EXTRACT_I_LT(S,  8,  iRegINoSp, H)
+VECTOR_EXTRACT_I_LT(I,  4,  iRegINoSp, S)
+VECTOR_EXTRACT_I_LT(L,  2,  iRegLNoSp, D)
+
+instruct extractF(vRegF dst, vReg src, immI idx)
+%{
+  predicate(UseSVE > 0);
+  match(Set dst (ExtractF src idx));
+  ins_cost(2 * SVE_COST);
+  format %{ "sve_extract_f $dst, S, $src, $idx\t# extract from vector(F)" %}
+  ins_encode %{
+    if ((as_FloatRegister($dst$$reg) == as_FloatRegister($src$$reg)) && ($idx$$constant == 0)) {
+      /* empty */
+    } else if ($idx$$constant == 0) {
+      __ fmovs(as_FloatRegister($dst$$reg), as_FloatRegister($src$$reg));
+    } else if ($idx$$constant < 4) {
+      __ ins(as_FloatRegister($dst$$reg), __ S, as_FloatRegister($src$$reg), 0, (int)($idx$$constant));
+    } else {
+      __ sve_orr(as_FloatRegister($dst$$reg), as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
+      __ sve_ext(as_FloatRegister($dst$$reg), as_FloatRegister($dst$$reg), $idx$$constant << 2);
+    }
+  %}
+  ins_pipe(pipe_slow);
+%}
+
+instruct extractD(vRegD dst, vReg src, immI idx)
+%{
+  predicate(UseSVE > 0);
+  match(Set dst (ExtractD src idx));
+  ins_cost(2 * SVE_COST);
+  format %{ "sve_extract_d $dst, D, $src, $idx\t# extract from vector(D)" %}
+  ins_encode %{
+    if ((as_FloatRegister($dst$$reg) == as_FloatRegister($src$$reg)) && ($idx$$constant == 0)) {
+      /* empty */
+    } else if ($idx$$constant == 0) {
+      __ fmovd(as_FloatRegister($dst$$reg), as_FloatRegister($src$$reg));
+    } else if ($idx$$constant == 1) {
+      __ ins(as_FloatRegister($dst$$reg), __ D, as_FloatRegister($src$$reg), 0, 1);
+    } else {
+      __ sve_orr(as_FloatRegister($dst$$reg), as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
+      __ sve_ext(as_FloatRegister($dst$$reg), as_FloatRegister($dst$$reg), $idx$$constant << 3);
+    }
+  %}
+  ins_pipe(pipe_slow);
+%}
 
 // ------------------------------- VectorTest ----------------------------------
 
@@ -3202,19 +3242,18 @@ instruct vmask_lasttrue_partial(iRegINoSp dst, pReg src, pReg ptmp, rFlagsReg cr
   ins_pipe(pipe_slow);
 %}
 
-instruct vmask_tolong(iRegLNoSp dst, pReg src, vReg vtmp1, vReg vtmp2, pRegGov pgtmp, rFlagsReg cr) %{
+instruct vmask_tolong(iRegLNoSp dst, pReg src, vReg vtmp1, vReg vtmp2) %{
   predicate(UseSVE > 0 &&
             n->in(1)->bottom_type()->is_vect()->length() <= 64);
   match(Set dst (VectorMaskToLong src));
-  effect(TEMP vtmp1, TEMP vtmp2, TEMP pgtmp, KILL cr);
+  effect(TEMP vtmp1, TEMP vtmp2);
   ins_cost(13 * SVE_COST);
   format %{ "vmask_tolong $dst, $src\t# vector mask tolong (sve)" %}
   ins_encode %{
     __ sve_vmask_tolong(as_Register($dst$$reg), as_PRegister($src$$reg),
                         Matcher::vector_element_basic_type(this, $src),
                         Matcher::vector_length(this, $src),
-                        as_FloatRegister($vtmp1$$reg), as_FloatRegister($vtmp2$$reg),
-                        as_PRegister($pgtmp$$reg));
+                        as_FloatRegister($vtmp1$$reg), as_FloatRegister($vtmp2$$reg));
   %}
   ins_pipe(pipe_slow);
 %}dnl
