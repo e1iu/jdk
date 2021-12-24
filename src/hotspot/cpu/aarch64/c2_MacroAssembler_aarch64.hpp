@@ -58,6 +58,21 @@
   // the higher garbage bits.
   void bytemask_compress(Register dst);
 
+  void neon_add_reduction_integral(Register dst, BasicType bt, Register isrc, FloatRegister vsrc,
+                                   int vector_length_in_bytes, FloatRegister vtmp);
+
+  void neon_mul_reduction_integral(Register dst, BasicType bt, Register isrc,
+                                   FloatRegister vsrc, int vector_length_in_bytes,
+                                   FloatRegister vtmp1, FloatRegister vtmp2);
+
+  void neon_mul_reduction_fp(FloatRegister dst, BasicType bt, FloatRegister fsrc,
+                             FloatRegister vsrc, int vector_length_in_bytes, FloatRegister vtmp);
+
+  void neon_minmax_reduction_int(Register dst, BasicType bt, Register isrc, FloatRegister vsrc,
+                                 int vector_length_in_bytes, bool is_min, FloatRegister vtmp);
+
+  void neon_minmax_reduction_long(Register dst, Register isrc, FloatRegister vsrc, bool is_min);
+
   // Pack the lowest-numbered bit of each mask element in src into a long value
   // in dst, at most the first 64 lane elements.
   void sve_vmask_tolong(Register dst, PRegister src, BasicType bt, int lane_cnt,
