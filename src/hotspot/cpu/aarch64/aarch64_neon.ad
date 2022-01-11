@@ -1697,121 +1697,63 @@ instruct reduce_eor2L(iRegLNoSp dst, iRegL isrc, vecX vsrc, iRegLNoSp tmp)
 
 // ------------------------------ Vector insert ---------------------------------
 
-instruct insert8B(vecD dst, vecD src, iRegIorL2I val, immI idx)
+instruct insertI_64bits(vecD dst, vecD src, iRegIorL2I val, immI idx)
 %{
-  predicate(n->bottom_type()->is_vect()->element_basic_type() == T_BYTE);
+  predicate((n->bottom_type()->is_vect()->element_basic_type() == T_BYTE ||
+             n->bottom_type()->is_vect()->element_basic_type() == T_SHORT ||
+             n->bottom_type()->is_vect()->element_basic_type() == T_INT));
   match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
+  ins_cost(2 * INSN_COST);
   format %{ "orr    $dst, T8B, $src, $src\n\t"
-            "mov    $dst, B, $idx, $val\t# insert into vector(8B)" %}
+            "mov    $dst, B/H/S, $idx, $val\t# insertI into vector(64bits)" %}
   ins_encode %{
     if (as_FloatRegister($dst$$reg) != as_FloatRegister($src$$reg)) {
       __ orr(as_FloatRegister($dst$$reg), __ T8B,
              as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
     }
-    __ mov(as_FloatRegister($dst$$reg), __ B, $idx$$constant, $val$$Register);
+    __ mov(as_FloatRegister($dst$$reg),
+           __ elemType_to_regVariant(Matcher::vector_element_basic_type(this)),
+           $idx$$constant, $val$$Register);
   %}
   ins_pipe(pipe_slow);
 %}
 
-instruct insert16B(vecX dst, vecX src, iRegIorL2I val, immI idx)
+instruct insertI_128bits(vecX dst, vecX src, iRegIorL2I val, immI idx)
 %{
-  predicate(n->bottom_type()->is_vect()->element_basic_type() == T_BYTE);
+  predicate((n->bottom_type()->is_vect()->element_basic_type() == T_BYTE ||
+             n->bottom_type()->is_vect()->element_basic_type() == T_SHORT ||
+             n->bottom_type()->is_vect()->element_basic_type() == T_INT));
   match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
+  ins_cost(2 * INSN_COST);
   format %{ "orr    $dst, T16B, $src, $src\n\t"
-            "mov    $dst, B, $idx, $val\t# insert into vector(16B)" %}
+            "mov    $dst, B/H/S, $idx, $val\t# insertI into vector(128bits)" %}
   ins_encode %{
     if (as_FloatRegister($dst$$reg) != as_FloatRegister($src$$reg)) {
       __ orr(as_FloatRegister($dst$$reg), __ T16B,
              as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
     }
-    __ mov(as_FloatRegister($dst$$reg), __ B, $idx$$constant, $val$$Register);
+    __ mov(as_FloatRegister($dst$$reg),
+           __ elemType_to_regVariant(Matcher::vector_element_basic_type(this)),
+           $idx$$constant, $val$$Register);
   %}
   ins_pipe(pipe_slow);
 %}
 
-instruct insert4S(vecD dst, vecD src, iRegIorL2I val, immI idx)
-%{
-  predicate(n->bottom_type()->is_vect()->element_basic_type() == T_SHORT);
-  match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
-  format %{ "orr    $dst, T8B, $src, $src\n\t"
-            "mov    $dst, H, $idx, $val\t# insert into vector(4S)" %}
-  ins_encode %{
-    if (as_FloatRegister($dst$$reg) != as_FloatRegister($src$$reg)) {
-      __ orr(as_FloatRegister($dst$$reg), __ T8B,
-             as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
-    }
-    __ mov(as_FloatRegister($dst$$reg), __ H, $idx$$constant, $val$$Register);
-  %}
-  ins_pipe(pipe_slow);
-%}
-
-instruct insert8S(vecX dst, vecX src, iRegIorL2I val, immI idx)
-%{
-  predicate(n->bottom_type()->is_vect()->element_basic_type() == T_SHORT);
-  match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
-  format %{ "orr    $dst, T16B, $src, $src\n\t"
-            "mov    $dst, H, $idx, $val\t# insert into vector(8S)" %}
-  ins_encode %{
-    if (as_FloatRegister($dst$$reg) != as_FloatRegister($src$$reg)) {
-      __ orr(as_FloatRegister($dst$$reg), __ T16B,
-             as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
-    }
-    __ mov(as_FloatRegister($dst$$reg), __ H, $idx$$constant, $val$$Register);
-  %}
-  ins_pipe(pipe_slow);
-%}
-
-instruct insert2I(vecD dst, vecD src, iRegIorL2I val, immI idx)
-%{
-  predicate(n->bottom_type()->is_vect()->element_basic_type() == T_INT);
-  match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
-  format %{ "orr    $dst, T8B, $src, $src\n\t"
-            "mov    $dst, S, $idx, $val\t# insert into vector(2I)" %}
-  ins_encode %{
-    if (as_FloatRegister($dst$$reg) != as_FloatRegister($src$$reg)) {
-      __ orr(as_FloatRegister($dst$$reg), __ T8B,
-             as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
-    }
-    __ mov(as_FloatRegister($dst$$reg), __ S, $idx$$constant, $val$$Register);
-  %}
-  ins_pipe(pipe_slow);
-%}
-
-instruct insert4I(vecX dst, vecX src, iRegIorL2I val, immI idx)
-%{
-  predicate(n->bottom_type()->is_vect()->element_basic_type() == T_INT);
-  match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
-  format %{ "orr    $dst, T16B, $src, $src\n\t"
-            "mov    $dst, S, $idx, $val\t# insert into vector(4I)" %}
-  ins_encode %{
-    if (as_FloatRegister($dst$$reg) != as_FloatRegister($src$$reg)) {
-      __ orr(as_FloatRegister($dst$$reg), __ T16B,
-             as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
-    }
-    __ mov(as_FloatRegister($dst$$reg), __ S, $idx$$constant, $val$$Register);
-  %}
-  ins_pipe(pipe_slow);
-%}
-
-instruct insert2L(vecX dst, vecX src, iRegL val, immI idx)
+instruct insertL_128bits(vecX dst, vecX src, iRegL val, immI idx)
 %{
   predicate(n->bottom_type()->is_vect()->element_basic_type() == T_LONG);
   match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
+  ins_cost(2 * INSN_COST);
   format %{ "orr    $dst, T16B, $src, $src\n\t"
-            "mov    $dst, D, $idx, $val\t# insert into vector(2L)" %}
+            "mov    $dst, D, $idx, $val\t# insertL into vector(128bits)" %}
   ins_encode %{
     if (as_FloatRegister($dst$$reg) != as_FloatRegister($src$$reg)) {
       __ orr(as_FloatRegister($dst$$reg), __ T16B,
              as_FloatRegister($src$$reg), as_FloatRegister($src$$reg));
     }
-    __ mov(as_FloatRegister($dst$$reg), __ D, $idx$$constant, $val$$Register);
+    __ mov(as_FloatRegister($dst$$reg),
+           __ D,
+           $idx$$constant, $val$$Register);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -1820,7 +1762,7 @@ instruct insert2F(vecD dst, vecD src, vRegF val, immI idx)
 %{
   predicate(n->bottom_type()->is_vect()->element_basic_type() == T_FLOAT);
   match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
+  ins_cost(2 * INSN_COST);
   effect(TEMP_DEF dst);
   format %{ "orr    $dst, T8B, $src, $src\n\t"
             "ins    $dst, S, $val, $idx, 0\t# insert into vector(2F)" %}
@@ -1837,7 +1779,7 @@ instruct insert4F(vecX dst, vecX src, vRegF val, immI idx)
 %{
   predicate(n->bottom_type()->is_vect()->element_basic_type() == T_FLOAT);
   match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
+  ins_cost(2 * INSN_COST);
   effect(TEMP_DEF dst);
   format %{ "orr    $dst, T16B, $src, $src\n\t"
             "ins    $dst, S, $val, $idx, 0\t# insert into vector(4F)" %}
@@ -1854,7 +1796,7 @@ instruct insert2D(vecX dst, vecX src, vRegD val, immI idx)
 %{
   predicate(n->bottom_type()->is_vect()->element_basic_type() == T_DOUBLE);
   match(Set dst (VectorInsert (Binary src val) idx));
-  ins_cost(INSN_COST);
+  ins_cost(2 * INSN_COST);
   effect(TEMP_DEF dst);
   format %{ "orr    $dst, T16B, $src, $src\n\t"
             "ins    $dst, D, $val, $idx, 0\t# insert into vector(2D)" %}
